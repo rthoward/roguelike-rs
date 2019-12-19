@@ -9,6 +9,7 @@ const LIMIT_FPS: i32 = 60;
 
 struct Tcod {
     root: Root,
+    console: Offscreen,
 }
 
 fn handle_keys(tcod: &mut Tcod, player_x: &mut i32, player_y: &mut i32) -> bool {
@@ -57,6 +58,7 @@ fn main() {
     let mut player_x = SCREEN_WIDTH / 2;
     let mut player_y = SCREEN_HEIGHT / 2;
 
+    let console = Offscreen::new(SCREEN_WIDTH, SCREEN_HEIGHT);
     let root = Root::initializer()
         .font("arial10x10.png", FontLayout::Tcod)
         .font_type(FontType::Greyscale)
@@ -64,15 +66,25 @@ fn main() {
         .title("roguelike")
         .init();
 
-    let mut tcod = Tcod { root };
+    let mut tcod = Tcod { root, console };
 
     tcod::system::set_fps(LIMIT_FPS);
 
     while !tcod.root.window_closed() {
-        tcod.root.set_default_foreground(colors::WHITE);
-        tcod.root.clear();
-        tcod.root
+        tcod.console.set_default_foreground(colors::WHITE);
+        tcod.console.clear();
+        tcod.console
             .put_char(player_x, player_y, '@', BackgroundFlag::None);
+
+        blit(
+            &tcod.console,
+            (0, 0),
+            (SCREEN_WIDTH, SCREEN_HEIGHT),
+            &mut tcod.root,
+            (0, 0),
+            1.0,
+            1.0,
+        );
         tcod.root.flush();
 
         let exit = handle_keys(&mut tcod, &mut player_x, &mut player_y);
