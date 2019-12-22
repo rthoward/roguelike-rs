@@ -41,6 +41,12 @@ pub struct Map {
     pub width: i32,
 }
 
+impl Map {
+    pub fn tile(&self, x: i32, y: i32) -> Tile {
+        self.tiles[x as usize][y as usize]
+    }
+}
+
 pub fn make_map() -> Map {
     // fill map with "unblocked" tiles
     let mut tiles = vec![vec![Tile::empty(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];

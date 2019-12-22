@@ -214,6 +214,15 @@ impl<T> GenerationalIndexArray<T> {
         self.get(gen_index).map(f)
     }
 
+    pub fn update_mut<F: Fn(&mut T)>(&mut self, gen_index: GenerationalIndex, f: F) {
+        match self.get_mut(gen_index) {
+            Some(c) => {
+                f(c);
+            }
+            None => {}
+        }
+    }
+
     pub fn get_mut(&mut self, gen_index: GenerationalIndex) -> Option<&mut T> {
         if gen_index.index < self.0.len() {
             self.0[gen_index.index].as_mut().and_then(|e| {
