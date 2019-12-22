@@ -5,9 +5,11 @@ use tcod::input::KeyCode;
 
 mod generational_index;
 mod map;
+mod components;
 
 use generational_index::{GenerationalIndex, GenerationalIndexAllocator, GenerationalIndexArray};
 use map::{make_map, Map};
+use components::{Component, RenderComponent, PositionComponent};
 
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 80;
@@ -16,23 +18,6 @@ const LIMIT_FPS: i32 = 60;
 struct Tcod {
     root: Root,
     console: Offscreen,
-}
-
-enum Component {
-    Position(PositionComponent),
-    Render(RenderComponent),
-}
-
-struct PositionComponent {
-    x: i32,
-    y: i32,
-    map: usize,
-}
-
-struct RenderComponent {
-    glyph: char,
-    fg: colors::Color,
-    bg: Option<colors::Color>,
 }
 
 struct GameState {
