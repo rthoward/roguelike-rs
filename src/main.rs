@@ -1,3 +1,5 @@
+#![feature(drain_filter)] // TODO: need this?
+
 use tcod::colors;
 use tcod::console::*;
 use tcod::input::Key;
@@ -7,7 +9,7 @@ mod components;
 mod generational_index;
 mod map;
 
-use components::{Action, ActionComponent, Component, PositionComponent, RenderComponent};
+use components::{Component, PositionComponent, RenderComponent};
 use generational_index::{GenerationalIndex, GenerationalIndexAllocator, GenerationalIndexArray};
 use map::{make_map, Map};
 
@@ -20,6 +22,18 @@ struct Tcod {
     console: Offscreen,
 }
 
+enum Event {
+    Move {
+        entity: GenerationalIndex,
+        x: i32,
+        y: i32,
+    },
+    Collision {
+        collider: GenerationalIndex,
+        collidee: GenerationalIndex,
+    },
+}
+
 struct GameState {
     tcod: Tcod,
     running: bool,
@@ -27,23 +41,13 @@ struct GameState {
 
     position_components: GenerationalIndexArray<PositionComponent>,
     render_components: GenerationalIndexArray<RenderComponent>,
-    action_components: GenerationalIndexArray<ActionComponent>,
+    pending_events: Vec<Event>,
 
     entities: Vec<GenerationalIndex>,
 
     maps: Vec<Map>,
 
     player: GenerationalIndex,
-}
-
-impl GameState {
-    fn get_map(&self) -> Map {
-        let pp = self
-            .position_components
-            .get(self.player)
-            .expect("Could not get player position component.");
-        self.maps[pp.map]
-    }
 }
 
 fn create_player() -> Vec<Component> {
@@ -60,7 +64,6 @@ fn create_player() -> Vec<Component> {
     vec![
         Component::Position(player_position_component),
         Component::Render(player_render_component),
-        Component::Action(ActionComponent { actions: vec![] }),
     ]
 }
 
@@ -80,7 +83,6 @@ fn initial_state() -> GameState {
     let mut allocator = GenerationalIndexAllocator::new();
     let mut position_components = GenerationalIndexArray::new();
     let mut render_components = GenerationalIndexArray::new();
-    let mut action_components = GenerationalIndexArray::new();
     let mut entities = vec![];
 
     let component_lists = vec![create_player()];
@@ -95,9 +97,6 @@ fn initial_state() -> GameState {
                 Component::Render(c) => {
                     render_components.insert(i, c);
                 }
-                Component::Action(c) => {
-                    action_components.insert(i, c);
-                }
             }
         }
     }
@@ -110,7 +109,7 @@ fn initial_state() -> GameState {
         entities,
         position_components,
         render_components,
-        action_components,
+        pending_events: vec![],
         player,
         maps,
     }
@@ -157,25 +156,25 @@ fn render_system(game_state: &mut GameState) {
 
 fn input_system(game_state: &mut GameState) {
     let key = game_state.tcod.root.wait_for_keypress(true);
-    let pa = game_state
-        .action_components
-        .get_mut(game_state.player)
-        .expect("Could not retrieve player action component.");
 
-    let movement_action: Option<Action> = match key {
-        Key { printable: 'k', .. } => Some(Action::Move(0, -1)),
-        Key { printable: 'j', .. } => Some(Action::Move(0, 1)),
-        Key { printable: 'h', .. } => Some(Action::Move(-1, 0)),
-        Key { printable: 'l', .. } => Some(Action::Move(1, 0)),
-        Key { printable: 'y', .. } => Some(Action::Move(-1, -1)),
-        Key { printable: 'u', .. } => Some(Action::Move(1, -1)),
-        Key { printable: 'b', .. } => Some(Action::Move(-1, 1)),
-        Key { printable: 'n', .. } => Some(Action::Move(1, 1)),
+    let movement: Option<(i32, i32)> = match key {
+        Key { printable: 'k', .. } => Some((0, -1)),
+        Key { printable: 'j', .. } => Some((0, 1)),
+        Key { printable: 'h', .. } => Some((-1, 0)),
+        Key { printable: 'l', .. } => Some((1, 0)),
+        Key { printable: 'y', .. } => Some((-1, -1)),
+        Key { printable: 'u', .. } => Some((1, -1)),
+        Key { printable: 'b', .. } => Some((-1, 1)),
+        Key { printable: 'n', .. } => Some((1, 1)),
         _ => None,
     };
 
-    match movement_action {
-        Some(a) => pa.actions.push(a),
+    match movement {
+        Some((x, y)) => game_state.pending_events.push(Event::Move {
+            entity: game_state.player,
+            x,
+            y,
+        }),
         None => {}
     };
 
@@ -197,26 +196,28 @@ fn input_system(game_state: &mut GameState) {
     }
 }
 
-fn action_system(game_state: &mut GameState) {
-    for (i, ac) in game_state.action_components.iter_mut() {
-        for action in ac.actions.drain(..) {
-            match action {
-                Action::Move(x, y) => {
-                    game_state.position_components.update_mut(i, |c| {
-                        if can_move(game_state, c.x + x, c.y + y) {
-                            c.x += x;
-                            c.y += y;
+fn movement_system(game_state: &mut GameState) {
+    let events = game_state.pending_events.drain_filter(|a| match a {
+        Event::Move { .. } => true,
+        _ => false,
+    });
+    for event in events {
+        match event {
+            Event::Move { entity, x, y } => {
+                if let Some(pc) = game_state.position_components.get_mut(entity) {
+                    let new_x = pc.x + x;
+                    let new_y = pc.y + y;
+                    if let Some(map) = game_state.maps.get(pc.map) {
+                        if map.can_move(new_x, new_y) {
+                            pc.x = new_x;
+                            pc.y = new_y;
                         }
-                    });
+                    }
                 }
             }
+            _ => {}
         }
     }
-}
-
-fn can_move(game_state: &GameState, x: i32, y: i32) -> bool {
-    let tile = game_state.get_map().tile(x, y);
-    !tile.blocked
 }
 
 fn main() {
@@ -224,6 +225,6 @@ fn main() {
     while game_state.running && !game_state.tcod.root.window_closed() {
         render_system(&mut game_state);
         input_system(&mut game_state);
-        action_system(&mut game_state);
+        movement_system(&mut game_state);
     }
 }

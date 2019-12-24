@@ -45,6 +45,10 @@ impl Map {
     pub fn tile(&self, x: i32, y: i32) -> Tile {
         self.tiles[x as usize][y as usize]
     }
+
+    pub fn can_move(&self, x: i32, y: i32) -> bool {
+        !self.tile(x, y).blocked
+    }
 }
 
 pub fn make_map() -> Map {
