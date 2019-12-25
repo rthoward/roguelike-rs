@@ -1,3 +1,4 @@
+use crate::coord::Coord;
 use tcod::colors;
 
 pub enum Component {
@@ -6,8 +7,7 @@ pub enum Component {
 }
 
 pub struct PositionComponent {
-    pub x: i32,
-    pub y: i32,
+    pub coord: Coord,
     pub map: usize,
 }
 

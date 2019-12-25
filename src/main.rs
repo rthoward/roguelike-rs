@@ -6,10 +6,12 @@ use tcod::input::Key;
 use tcod::input::KeyCode;
 
 mod components;
+mod coord;
 mod generational_index;
 mod map;
 
 use components::{Component, PositionComponent, RenderComponent};
+use coord::Coord;
 use generational_index::{GenerationalIndex, GenerationalIndexAllocator, GenerationalIndexArray};
 use map::{make_map, Map};
 
@@ -25,8 +27,7 @@ struct Tcod {
 enum Event {
     Move {
         entity: GenerationalIndex,
-        x: i32,
-        y: i32,
+        coord: Coord,
     },
     Collision {
         collider: GenerationalIndex,
@@ -51,19 +52,36 @@ struct GameState {
 }
 
 fn create_player() -> Vec<Component> {
-    let player_position_component = PositionComponent {
-        x: SCREEN_WIDTH / 2,
-        y: SCREEN_HEIGHT / 2,
-        map: 0,
-    };
-    let player_render_component = RenderComponent {
-        glyph: '@',
-        fg: colors::WHITE,
-        bg: None,
-    };
     vec![
-        Component::Position(player_position_component),
-        Component::Render(player_render_component),
+        Component::Position(PositionComponent {
+            coord: Coord {
+                x: SCREEN_WIDTH / 2,
+                y: SCREEN_HEIGHT / 2,
+            },
+            map: 0,
+        }),
+        Component::Render(RenderComponent {
+            glyph: '@',
+            fg: colors::WHITE,
+            bg: None,
+        }),
+    ]
+}
+
+fn create_orc() -> Vec<Component> {
+    vec![
+        Component::Position(PositionComponent {
+            coord: Coord {
+                x: SCREEN_WIDTH / 2 + 1,
+                y: SCREEN_HEIGHT / 2,
+            },
+            map: 0,
+        }),
+        Component::Render(RenderComponent {
+            glyph: 'o',
+            fg: colors::GREEN,
+            bg: None,
+        }),
     ]
 }
 
@@ -85,7 +103,7 @@ fn initial_state() -> GameState {
     let mut render_components = GenerationalIndexArray::new();
     let mut entities = vec![];
 
-    let component_lists = vec![create_player()];
+    let component_lists = vec![create_player(), create_orc()];
     for components in component_lists {
         let i = allocator.allocate();
         entities.push(i);
@@ -125,7 +143,7 @@ fn render_system(game_state: &mut GameState) {
 
     for y in 0..map.height {
         for x in 0..map.width {
-            let tile = map.tiles[x as usize][y as usize];
+            let tile = map.get(&Coord::new(x, y));
             game_state
                 .tcod
                 .console
@@ -136,10 +154,13 @@ fn render_system(game_state: &mut GameState) {
     for (i, r) in game_state.render_components.iter() {
         let m = game_state.position_components.get(i).unwrap();
 
-        game_state
-            .tcod
-            .console
-            .put_char_ex(m.x, m.y, r.glyph, r.fg, r.bg.unwrap_or(colors::BLACK));
+        game_state.tcod.console.put_char_ex(
+            m.coord.x,
+            m.coord.y,
+            r.glyph,
+            r.fg,
+            r.bg.unwrap_or(colors::BLACK),
+        );
 
         blit(
             &game_state.tcod.console,
@@ -172,8 +193,7 @@ fn input_system(game_state: &mut GameState) {
     match movement {
         Some((x, y)) => game_state.pending_events.push(Event::Move {
             entity: game_state.player,
-            x,
-            y,
+            coord: Coord::new(x, y),
         }),
         None => {}
     };
@@ -203,14 +223,12 @@ fn movement_system(game_state: &mut GameState) {
     });
     for event in events {
         match event {
-            Event::Move { entity, x, y } => {
+            Event::Move { entity, coord } => {
                 if let Some(pc) = game_state.position_components.get_mut(entity) {
-                    let new_x = pc.x + x;
-                    let new_y = pc.y + y;
+                    let new_c = pc.coord.add(coord);
                     if let Some(map) = game_state.maps.get(pc.map) {
-                        if map.can_move(new_x, new_y) {
-                            pc.x = new_x;
-                            pc.y = new_y;
+                        if map.can_move(&new_c) {
+                            pc.coord = new_c;
                         }
                     }
                 }
