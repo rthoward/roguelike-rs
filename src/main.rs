@@ -93,7 +93,7 @@ fn initial_state() -> GameState {
         .size(SCREEN_WIDTH, SCREEN_HEIGHT)
         .title("roguelike")
         .init();
-    let maps = vec![make_map()];
+    let maps = vec![make_map(SCREEN_HEIGHT, SCREEN_WIDTH)];
 
     let tcod = Tcod { root, console };
     tcod::system::set_fps(LIMIT_FPS);
