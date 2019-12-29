@@ -1,11 +1,12 @@
 #![feature(drain_filter)]
 
+use std::collections::HashMap;
 use tcod::colors;
 use tcod::console::*;
 use tcod::input::Key;
 use tcod::input::KeyCode;
 
-use specs::{Builder, Entity, ReadStorage, System, World, WorldExt, WriteStorage};
+use specs::{Builder, Entities, Entity, ReadStorage, System, World, WorldExt, WriteStorage};
 
 mod components;
 mod coord;
@@ -31,29 +32,43 @@ struct GameState {
     map: usize,
 }
 
-struct MovementSystem;
+struct MovementSystem {
+    occupied_coords: HashMap<Coord, Entity>,
+}
+
 impl<'a> System<'a> for MovementSystem {
     type SystemData = (
         WriteStorage<'a, PositionComponent>,
         WriteStorage<'a, EventsComponent>,
         specs::ReadExpect<'a, GameState>,
+        Entities<'a>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut positions, mut events, game_state) = data;
+        let (mut positions, mut events, game_state, entities) = data;
         let map = game_state
             .maps
             .get(game_state.map)
             .expect("Could not get map");
 
-        for (position, events) in (&mut positions, &mut events).join() {
+        for (position, events, entity) in (&mut positions, &mut events, &*entities).join() {
             events.queue.drain_filter(|e| match e {
                 Event::Move { coord } => {
                     let new_coord = position.coord.add(coord);
-                    if map.can_move(&new_coord) {
+                    let map_collision = !map.can_move(&new_coord);
+                    let entity_collision =
+                        if let Some(_collidee) = self.occupied_coords.get(&new_coord) {
+                            // TODO: notify collidee
+                            true
+                        } else {
+                            false
+                        };
+                    if !map_collision && !entity_collision {
+                        self.occupied_coords.remove(&position.coord);
                         position.coord = new_coord;
+                        self.occupied_coords.insert(new_coord, entity);
                     }
                     true
                 }
@@ -186,7 +201,13 @@ fn main() {
 
     let mut dispatcher = specs::DispatcherBuilder::new()
         .with_thread_local(tcod)
-        .with(MovementSystem, "movement_system", &[])
+        .with(
+            MovementSystem {
+                occupied_coords: HashMap::new(),
+            },
+            "movement_system",
+            &[],
+        )
         .build();
 
     dispatcher.setup(&mut world);
@@ -204,6 +225,19 @@ fn main() {
         })
         .with(EventsComponent { queue: vec![] })
         .with(PlayerComponent)
+        .build();
+
+    world
+        .create_entity()
+        .with(PositionComponent {
+            coord: Coord::new(3, 3),
+            map: 0,
+        })
+        .with(RenderComponent {
+            glyph: 'o',
+            fg: colors::GREEN,
+            bg: None,
+        })
         .build();
 
     world.insert(game_state);
