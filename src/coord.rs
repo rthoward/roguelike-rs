@@ -9,7 +9,7 @@ impl Coord {
         Coord { x, y }
     }
 
-    pub fn add(&self, other: Coord) -> Self {
+    pub fn add(&self, other: &Coord) -> Self {
         Coord {
             x: self.x + other.x,
             y: self.y + other.y,

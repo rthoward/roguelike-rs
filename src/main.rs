@@ -1,16 +1,18 @@
+#![feature(drain_filter)]
+
 use tcod::colors;
 use tcod::console::*;
 use tcod::input::Key;
 use tcod::input::KeyCode;
 
-use specs::{Builder, ReadStorage, System, World, WorldExt, Entity, WriteStorage};
+use specs::{Builder, Entity, ReadStorage, System, World, WorldExt, WriteStorage};
 
 mod components;
 mod coord;
 mod generational_index;
 mod map;
 
-use components::{PositionComponent, RenderComponent, EventsComponent, PlayerComponent};
+use components::{Event, EventsComponent, PlayerComponent, PositionComponent, RenderComponent};
 use coord::Coord;
 use map::{make_map, Map};
 
@@ -29,11 +31,6 @@ struct GameState {
     player: Entity,
     map: usize,
 }
-
-// struct MovementSystem;
-// impl<'a> System<'a> for MovementSystem {
-//     type SystemData = (WriteStorage<'a, PositionComponent>, ReadStorage<'a, EventsComponent>);
-// }
 
 // fn movement_system(game_state: &mut GameState) {
 //     let events = game_state.pending_events.drain_filter(|a| match a {
@@ -57,6 +54,30 @@ struct GameState {
 //     }
 // }
 
+struct MovementSystem;
+impl<'a> System<'a> for MovementSystem {
+    type SystemData = (
+        WriteStorage<'a, PositionComponent>,
+        WriteStorage<'a, EventsComponent>,
+    );
+
+    fn run(&mut self, data: Self::SystemData) {
+        use specs::Join;
+
+        let (mut positions, mut events) = data;
+
+        for (position, events) in (&mut positions, &mut events).join() {
+            events.queue.drain_filter(|e| match e {
+                Event::Move { coord } => {
+                    position.coord = position.coord.add(coord);
+                    true
+                }
+                _ => false,
+            });
+        }
+    }
+}
+
 struct HelloWorld;
 impl<'a> System<'a> for HelloWorld {
     type SystemData = ReadStorage<'a, PositionComponent>;
@@ -76,7 +97,7 @@ impl<'a> System<'a> for TcodSystem {
         ReadStorage<'a, PositionComponent>,
         ReadStorage<'a, PlayerComponent>,
         WriteStorage<'a, EventsComponent>,
-        specs::WriteExpect<'a, GameState>
+        specs::WriteExpect<'a, GameState>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
@@ -84,21 +105,20 @@ impl<'a> System<'a> for TcodSystem {
 
         let root = &mut self.root;
         let console = &mut self.console;
-        let (sprites, positions, players, events, mut game_state) = data;
-        let player = game_state.player;
-        let map = game_state.maps.get(game_state.map).expect("Could not find map");
+        let (sprites, positions, players, mut events, mut game_state) = data;
+        let map = game_state
+            .maps
+            .get(game_state.map)
+            .expect("Could not find map");
 
         root.clear();
-        println!("rendering");
         for y in 0..map.height {
             for x in 0..map.width {
                 let tile = map.get(&Coord::new(x, y));
-                console
-                    .set_char_background(x, y, tile.bg, BackgroundFlag::Set);
+                console.set_char_background(x, y, tile.bg, BackgroundFlag::Set);
             }
         }
         for (sprite, pos) in (&sprites, &positions).join() {
-            dbg!(pos);
             console.put_char(pos.coord.x, pos.coord.y, sprite.glyph, BackgroundFlag::None);
         }
         blit(
@@ -126,20 +146,17 @@ impl<'a> System<'a> for TcodSystem {
             _ => None,
         };
 
+        dbg!(movement);
+
         if let Some((x, y)) = movement {
-            for (player, events) in (players, events).join() {
-                events.push(Event::Move{ entity: player, coord: Coord::new(x, y)})
+            for (_player, events) in (&players, &mut events).join() {
+                events.queue.push(Event::Move {
+                    coord: Coord::new(x, y),
+                });
+                println!("moving");
                 dbg!(events);
             }
         }
-
-        // match movement {
-        //     Some((x, y)) => player_events.push(Event::Move {
-        //         entity: player,
-        //         coord: Coord::new(x, y),
-        //     }),
-        //     None => {}
-        // };
 
         match key {
             Key {
@@ -147,8 +164,7 @@ impl<'a> System<'a> for TcodSystem {
                 alt: true,
                 ..
             } => {
-                    root
-                    .set_fullscreen(!root.is_fullscreen());
+                root.set_fullscreen(!root.is_fullscreen());
             }
 
             Key { printable: 'q', .. } => game_state.running = false,
@@ -177,6 +193,7 @@ fn main() {
 
     let mut dispatcher = specs::DispatcherBuilder::new()
         .with(HelloWorld, "print_sys", &[])
+        .with(MovementSystem, "movement_system", &[])
         .with_thread_local(tcod)
         .build();
 
@@ -193,6 +210,8 @@ fn main() {
             fg: colors::WHITE,
             bg: None,
         })
+        .with(EventsComponent { queue: vec![] })
+        .with(PlayerComponent)
         .build();
 
     let game_state = GameState {
@@ -202,9 +221,7 @@ fn main() {
         map: 0,
     };
 
-
     world.insert(game_state);
-
 
     loop {
         dispatcher.dispatch(&mut world);

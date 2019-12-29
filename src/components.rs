@@ -19,16 +19,13 @@ pub struct RenderComponent {
 
 #[derive(Debug)]
 pub enum Event {
-    Move {
-        entity: Entity,
-        coord: Coord,
-    },
+    Move { coord: Coord },
 }
 
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct EventsComponent {
-  pub actions: Vec<Event>,
+    pub queue: Vec<Event>,
 }
 
 #[derive(Component, Debug, Default)]
