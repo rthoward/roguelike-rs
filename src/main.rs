@@ -28,48 +28,33 @@ struct TcodSystem {
 struct GameState {
     running: bool,
     maps: Vec<Map>,
-    player: Entity,
     map: usize,
 }
-
-// fn movement_system(game_state: &mut GameState) {
-//     let events = game_state.pending_events.drain_filter(|a| match a {
-//         Event::Move { .. } => true,
-//         _ => false,
-//     });
-//     for event in events {
-//         match event {
-//             Event::Move { entity, coord } => {
-//                 if let Some(pc) = game_state.position_components.get_mut(entity) {
-//                     let new_c = pc.coord.add(coord);
-//                     if let Some(map) = game_state.maps.get(pc.map) {
-//                         if map.can_move(&new_c) {
-//                             pc.coord = new_c;
-//                         }
-//                     }
-//                 }
-//             }
-//             _ => {}
-//         }
-//     }
-// }
 
 struct MovementSystem;
 impl<'a> System<'a> for MovementSystem {
     type SystemData = (
         WriteStorage<'a, PositionComponent>,
         WriteStorage<'a, EventsComponent>,
+        specs::ReadExpect<'a, GameState>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut positions, mut events) = data;
+        let (mut positions, mut events, game_state) = data;
+        let map = game_state
+            .maps
+            .get(game_state.map)
+            .expect("Could not get map");
 
         for (position, events) in (&mut positions, &mut events).join() {
             events.queue.drain_filter(|e| match e {
                 Event::Move { coord } => {
-                    position.coord = position.coord.add(coord);
+                    let new_coord = position.coord.add(coord);
+                    if map.can_move(&new_coord) {
+                        position.coord = new_coord;
+                    }
                     true
                 }
                 _ => false,
@@ -112,6 +97,7 @@ impl<'a> System<'a> for TcodSystem {
             .expect("Could not find map");
 
         root.clear();
+        console.clear();
         for y in 0..map.height {
             for x in 0..map.width {
                 let tile = map.get(&Coord::new(x, y));
@@ -119,7 +105,13 @@ impl<'a> System<'a> for TcodSystem {
             }
         }
         for (sprite, pos) in (&sprites, &positions).join() {
-            console.put_char(pos.coord.x, pos.coord.y, sprite.glyph, BackgroundFlag::None);
+            console.put_char_ex(
+                pos.coord.x,
+                pos.coord.y,
+                sprite.glyph,
+                sprite.fg,
+                sprite.bg.unwrap_or(colors::BLACK),
+            );
         }
         blit(
             console,
@@ -146,15 +138,11 @@ impl<'a> System<'a> for TcodSystem {
             _ => None,
         };
 
-        dbg!(movement);
-
         if let Some((x, y)) = movement {
             for (_player, events) in (&players, &mut events).join() {
                 events.queue.push(Event::Move {
                     coord: Coord::new(x, y),
                 });
-                println!("moving");
-                dbg!(events);
             }
         }
 
@@ -183,6 +171,11 @@ fn main() {
         .size(SCREEN_WIDTH, SCREEN_HEIGHT)
         .title("roguelike")
         .init();
+    let game_state = GameState {
+        maps: vec![make_map(SCREEN_WIDTH, SCREEN_WIDTH)],
+        running: true,
+        map: 0,
+    };
 
     tcod::system::set_fps(LIMIT_FPS);
     let tcod = TcodSystem { root, console };
@@ -192,14 +185,13 @@ fn main() {
     world.register::<RenderComponent>();
 
     let mut dispatcher = specs::DispatcherBuilder::new()
-        .with(HelloWorld, "print_sys", &[])
-        .with(MovementSystem, "movement_system", &[])
         .with_thread_local(tcod)
+        .with(MovementSystem, "movement_system", &[])
         .build();
 
     dispatcher.setup(&mut world);
 
-    let player = world
+    world
         .create_entity()
         .with(PositionComponent {
             coord: Coord::new(1, 1),
@@ -213,13 +205,6 @@ fn main() {
         .with(EventsComponent { queue: vec![] })
         .with(PlayerComponent)
         .build();
-
-    let game_state = GameState {
-        maps: vec![make_map(SCREEN_WIDTH, SCREEN_WIDTH)],
-        running: true,
-        player,
-        map: 0,
-    };
 
     world.insert(game_state);
 
