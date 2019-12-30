@@ -17,9 +17,10 @@ pub struct RenderComponent {
     pub bg: Option<colors::Color>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Event {
     Move { coord: Coord },
+    Collision { collider: Entity, collidee: Entity },
 }
 
 #[derive(Component, Debug)]

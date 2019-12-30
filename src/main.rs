@@ -54,41 +54,48 @@ impl<'a> System<'a> for MovementSystem {
         for (position, entity) in (&positions, &*entities).join() {
             occupied_coords.insert(position.coord, entity);
         }
-
         for (position, events, entity) in (&mut positions, &mut events, &*entities).join() {
-            events.queue.drain_filter(|e| match e {
-                Event::Move { coord } => {
-                    let new_coord = position.coord.add(coord);
-                    let map_collision = !map.can_move(&new_coord);
-                    let entity_collision = if let Some(_collidee) = occupied_coords.get(&new_coord)
-                    {
-                        // TODO: notify collidee
-                        true
-                    } else {
-                        false
-                    };
-                    if !map_collision && !entity_collision {
-                        occupied_coords.remove(&position.coord);
-                        position.coord = new_coord;
-                        occupied_coords.insert(new_coord, entity);
+            let mut new_events: Vec<Event> = vec![];
+            for e in events.queue.iter() {
+                match e {
+                    Event::Move { coord } => {
+                        let new_coord = position.coord.add(coord);
+                        let map_collision = !map.can_move(&new_coord);
+                        let entity_collision =
+                            if let Some(collidee) = occupied_coords.get(&new_coord) {
+                                new_events.push(Event::Collision {
+                                    collider: entity,
+                                    collidee: *collidee,
+                                });
+                                true
+                            } else {
+                                false
+                            };
+                        if !map_collision && !entity_collision {
+                            occupied_coords.remove(&position.coord);
+                            position.coord = new_coord;
+                            occupied_coords.insert(new_coord, entity);
+                        }
                     }
-                    true
+                    _ => (),
                 }
-                _ => false,
-            });
+            }
+            events.queue.extend(new_events.iter())
         }
     }
 }
 
-struct HelloWorld;
-impl<'a> System<'a> for HelloWorld {
-    type SystemData = ReadStorage<'a, PositionComponent>;
+struct EventDrain;
+impl<'a> System<'a> for EventDrain {
+    type SystemData = WriteStorage<'a, EventsComponent>;
 
-    fn run(&mut self, position: Self::SystemData) {
+    fn run(&mut self, mut events: Self::SystemData) {
         use specs::Join;
 
-        for position in position.join() {
-            println!("Hello, {:?}", &position);
+        for events in (&mut events).join() {
+            for event in events.queue.drain(..) {
+                dbg!(event);
+            }
         }
     }
 }
@@ -204,6 +211,7 @@ fn main() {
     let mut dispatcher = specs::DispatcherBuilder::new()
         .with_thread_local(tcod)
         .with(MovementSystem {}, "movement_system", &[])
+        .with(EventDrain {}, "event_drain", &[])
         .build();
 
     dispatcher.setup(&mut world);
