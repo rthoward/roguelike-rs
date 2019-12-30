@@ -32,10 +32,7 @@ struct GameState {
     map: usize,
 }
 
-struct MovementSystem {
-    occupied_coords: HashMap<Coord, Entity>,
-}
-
+struct MovementSystem;
 impl<'a> System<'a> for MovementSystem {
     type SystemData = (
         WriteStorage<'a, PositionComponent>,
@@ -53,22 +50,27 @@ impl<'a> System<'a> for MovementSystem {
             .get(game_state.map)
             .expect("Could not get map");
 
+        let mut occupied_coords: HashMap<Coord, Entity> = HashMap::new();
+        for (position, entity) in (&positions, &*entities).join() {
+            occupied_coords.insert(position.coord, entity);
+        }
+
         for (position, events, entity) in (&mut positions, &mut events, &*entities).join() {
             events.queue.drain_filter(|e| match e {
                 Event::Move { coord } => {
                     let new_coord = position.coord.add(coord);
                     let map_collision = !map.can_move(&new_coord);
-                    let entity_collision =
-                        if let Some(_collidee) = self.occupied_coords.get(&new_coord) {
-                            // TODO: notify collidee
-                            true
-                        } else {
-                            false
-                        };
+                    let entity_collision = if let Some(_collidee) = occupied_coords.get(&new_coord)
+                    {
+                        // TODO: notify collidee
+                        true
+                    } else {
+                        false
+                    };
                     if !map_collision && !entity_collision {
-                        self.occupied_coords.remove(&position.coord);
+                        occupied_coords.remove(&position.coord);
                         position.coord = new_coord;
-                        self.occupied_coords.insert(new_coord, entity);
+                        occupied_coords.insert(new_coord, entity);
                     }
                     true
                 }
@@ -201,13 +203,7 @@ fn main() {
 
     let mut dispatcher = specs::DispatcherBuilder::new()
         .with_thread_local(tcod)
-        .with(
-            MovementSystem {
-                occupied_coords: HashMap::new(),
-            },
-            "movement_system",
-            &[],
-        )
+        .with(MovementSystem {}, "movement_system", &[])
         .build();
 
     dispatcher.setup(&mut world);
