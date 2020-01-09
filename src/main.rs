@@ -10,7 +10,6 @@ use specs::{Builder, Entities, Entity, ReadStorage, System, World, WorldExt, Wri
 
 mod components;
 mod coord;
-mod generational_index;
 mod map;
 
 use components::{
