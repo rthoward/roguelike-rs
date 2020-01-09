@@ -17,16 +17,27 @@ pub struct RenderComponent {
     pub bg: Option<colors::Color>,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Event {
-    Move { coord: Coord },
-    Collision { collider: Entity, collidee: Entity },
+#[derive(Debug)]
+pub struct MoveEvent {
+    pub coord: Coord,
+}
+
+#[derive(Debug)]
+pub struct CollisionEvent {
+    pub collider: Entity,
+    pub collidee: Entity,
 }
 
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
-pub struct EventsComponent {
-    pub queue: Vec<Event>,
+pub struct MovementComponent {
+    pub events: Vec<MoveEvent>,
+}
+
+#[derive(Component, Debug)]
+#[storage(VecStorage)]
+pub struct CollisionComponent {
+    pub events: Vec<CollisionEvent>,
 }
 
 #[derive(Component, Debug, Default)]

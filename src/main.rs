@@ -13,7 +13,10 @@ mod coord;
 mod generational_index;
 mod map;
 
-use components::{Event, EventsComponent, PlayerComponent, PositionComponent, RenderComponent};
+use components::{
+    CollisionComponent, CollisionEvent, MoveEvent, MovementComponent, PlayerComponent,
+    PositionComponent, RenderComponent,
+};
 use coord::Coord;
 use map::{make_map, Map};
 
@@ -42,7 +45,8 @@ struct MovementSystem;
 impl<'a> System<'a> for MovementSystem {
     type SystemData = (
         WriteStorage<'a, PositionComponent>,
-        WriteStorage<'a, EventsComponent>,
+        WriteStorage<'a, MovementComponent>,
+        WriteStorage<'a, CollisionComponent>,
         specs::ReadExpect<'a, GameState>,
         Entities<'a>,
     );
@@ -50,53 +54,60 @@ impl<'a> System<'a> for MovementSystem {
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut positions, mut events, game_state, entities) = data;
+        let (mut positions, mut movements, mut collisions, game_state, entities) = data;
         let map = game_state.get_map();
 
         let mut occupied_coords: HashMap<Coord, Entity> = HashMap::new();
         for (position, entity) in (&positions, &*entities).join() {
             occupied_coords.insert(position.coord, entity);
         }
-        for (position, events, entity) in (&mut positions, &mut events, &*entities).join() {
-            let mut new_events: Vec<Event> = vec![];
-            for e in events.queue.iter() {
-                match e {
-                    Event::Move { coord } => {
-                        let new_coord = position.coord.add(coord);
-                        let map_collision = !map.can_move(&new_coord);
-                        let entity_collision =
-                            if let Some(collidee) = occupied_coords.get(&new_coord) {
-                                new_events.push(Event::Collision {
-                                    collider: entity,
-                                    collidee: *collidee,
-                                });
-                                true
-                            } else {
-                                false
-                            };
-                        if !map_collision && !entity_collision {
-                            occupied_coords.remove(&position.coord);
-                            position.coord = new_coord;
-                            occupied_coords.insert(new_coord, entity);
-                        }
+        for (position, movements, entity) in (&mut positions, &mut movements, &*entities).join() {
+            for MoveEvent { coord } in movements.events.iter() {
+                let new_coord = position.coord.add(coord);
+                let map_collision = !map.can_move(&new_coord);
+                let entity_collision = if let Some(collidee) = occupied_coords.get(&new_coord) {
+                    if let Some(collidable_collidee) = collisions.get_mut(*collidee) {
+                        collidable_collidee.events.push(CollisionEvent {
+                            collider: entity,
+                            collidee: *collidee,
+                        });
+                        true
+                    } else {
+                        false
                     }
-                    _ => (),
+                } else {
+                    false
+                };
+                if !map_collision && !entity_collision {
+                    occupied_coords.remove(&position.coord);
+                    position.coord = new_coord;
+                    occupied_coords.insert(new_coord, entity);
                 }
             }
-            events.queue.extend(new_events.iter())
         }
     }
 }
 
 struct EventDrain;
 impl<'a> System<'a> for EventDrain {
-    type SystemData = WriteStorage<'a, EventsComponent>;
+    type SystemData = (
+        WriteStorage<'a, MovementComponent>,
+        WriteStorage<'a, CollisionComponent>,
+    );
 
-    fn run(&mut self, mut events: Self::SystemData) {
+    fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        for events in (&mut events).join() {
-            for event in events.queue.drain(..) {
+        let (mut movement, mut collision) = data;
+
+        for movement in (&mut movement).join() {
+            for event in movement.events.drain(..) {
+                dbg!(event);
+            }
+        }
+
+        for collision in (&mut collision).join() {
+            for event in collision.events.drain(..) {
                 dbg!(event);
             }
         }
@@ -108,7 +119,7 @@ impl<'a> System<'a> for TcodSystem {
         ReadStorage<'a, RenderComponent>,
         ReadStorage<'a, PositionComponent>,
         ReadStorage<'a, PlayerComponent>,
-        WriteStorage<'a, EventsComponent>,
+        WriteStorage<'a, MovementComponent>,
         specs::WriteExpect<'a, GameState>,
     );
 
@@ -117,7 +128,7 @@ impl<'a> System<'a> for TcodSystem {
 
         let root = &mut self.root;
         let console = &mut self.console;
-        let (sprites, positions, players, mut events, mut game_state) = data;
+        let (sprites, positions, players, mut movements, mut game_state) = data;
         let map = game_state.get_map();
 
         root.clear();
@@ -163,8 +174,8 @@ impl<'a> System<'a> for TcodSystem {
         };
 
         if let Some((x, y)) = movement {
-            for (_player, events) in (&players, &mut events).join() {
-                events.queue.push(Event::Move {
+            for (_player, movements) in (&players, &mut movements).join() {
+                movements.events.push(MoveEvent {
                     coord: Coord::new(x, y),
                 });
             }
@@ -227,7 +238,8 @@ fn main() {
             fg: colors::WHITE,
             bg: None,
         })
-        .with(EventsComponent { queue: vec![] })
+        .with(MovementComponent { events: vec![] })
+        .with(CollisionComponent { events: vec![] })
         .with(PlayerComponent)
         .build();
 
@@ -242,6 +254,7 @@ fn main() {
             fg: colors::GREEN,
             bg: None,
         })
+        .with(CollisionComponent { events: vec![] })
         .build();
 
     world.insert(game_state);
