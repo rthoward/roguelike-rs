@@ -32,6 +32,12 @@ struct GameState {
     map: usize,
 }
 
+impl GameState {
+    fn get_map(&self) -> &Map {
+        self.maps.get(self.map).expect("Could not get current map")
+    }
+}
+
 struct MovementSystem;
 impl<'a> System<'a> for MovementSystem {
     type SystemData = (
@@ -45,10 +51,7 @@ impl<'a> System<'a> for MovementSystem {
         use specs::Join;
 
         let (mut positions, mut events, game_state, entities) = data;
-        let map = game_state
-            .maps
-            .get(game_state.map)
-            .expect("Could not get map");
+        let map = game_state.get_map();
 
         let mut occupied_coords: HashMap<Coord, Entity> = HashMap::new();
         for (position, entity) in (&positions, &*entities).join() {
@@ -115,10 +118,7 @@ impl<'a> System<'a> for TcodSystem {
         let root = &mut self.root;
         let console = &mut self.console;
         let (sprites, positions, players, mut events, mut game_state) = data;
-        let map = game_state
-            .maps
-            .get(game_state.map)
-            .expect("Could not find map");
+        let map = game_state.get_map();
 
         root.clear();
         console.clear();
