@@ -232,7 +232,7 @@ fn main() {
     world
         .create_entity()
         .with(PositionComponent {
-            coord: Coord::new(21, 16),
+            coord: game_state.get_map().start,
             map: 0,
         })
         .with(RenderComponent {
