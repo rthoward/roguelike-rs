@@ -17,7 +17,7 @@ use components::{
     PositionComponent, RenderComponent,
 };
 use coord::Coord;
-use map::{make_map, Map};
+use map::Map;
 
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 80;
@@ -66,7 +66,8 @@ impl<'a> System<'a> for MovementSystem {
             for MoveEvent { coord } in movements.events.iter() {
                 let new_coord = position.coord.add(coord);
                 let map_collision = !map.can_move(&new_coord);
-                let entity_collision = if let Some(collidee) = self.occupied_coords.get(&new_coord) {
+                let entity_collision = if let Some(collidee) = self.occupied_coords.get(&new_coord)
+                {
                     if let Some(collidable_collidee) = collisions.get_mut(*collidee) {
                         collidable_collidee.events.push(CollisionEvent {
                             collider: entity,
@@ -208,7 +209,7 @@ fn main() {
         .title("roguelike")
         .init();
     let game_state = GameState {
-        maps: vec![make_map(SCREEN_WIDTH, SCREEN_WIDTH)],
+        maps: vec![Map::make_dungeon_map(SCREEN_WIDTH, SCREEN_WIDTH)],
         running: true,
         map: 0,
     };
@@ -231,7 +232,7 @@ fn main() {
     world
         .create_entity()
         .with(PositionComponent {
-            coord: Coord::new(1, 1),
+            coord: Coord::new(21, 16),
             map: 0,
         })
         .with(RenderComponent {
