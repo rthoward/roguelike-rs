@@ -40,7 +40,10 @@ impl GameState {
     }
 }
 
-struct MovementSystem;
+#[derive(Default)]
+struct MovementSystem {
+    occupied_coords: HashMap<Coord, Entity>,
+}
 impl<'a> System<'a> for MovementSystem {
     type SystemData = (
         WriteStorage<'a, PositionComponent>,
@@ -56,15 +59,14 @@ impl<'a> System<'a> for MovementSystem {
         let (mut positions, mut movements, mut collisions, game_state, entities) = data;
         let map = game_state.get_map();
 
-        let mut occupied_coords: HashMap<Coord, Entity> = HashMap::new();
         for (position, entity) in (&positions, &*entities).join() {
-            occupied_coords.insert(position.coord, entity);
+            self.occupied_coords.insert(position.coord, entity);
         }
         for (position, movements, entity) in (&mut positions, &mut movements, &*entities).join() {
             for MoveEvent { coord } in movements.events.iter() {
                 let new_coord = position.coord.add(coord);
                 let map_collision = !map.can_move(&new_coord);
-                let entity_collision = if let Some(collidee) = occupied_coords.get(&new_coord) {
+                let entity_collision = if let Some(collidee) = self.occupied_coords.get(&new_coord) {
                     if let Some(collidable_collidee) = collisions.get_mut(*collidee) {
                         collidable_collidee.events.push(CollisionEvent {
                             collider: entity,
@@ -78,9 +80,9 @@ impl<'a> System<'a> for MovementSystem {
                     false
                 };
                 if !map_collision && !entity_collision {
-                    occupied_coords.remove(&position.coord);
+                    self.occupied_coords.remove(&position.coord);
                     position.coord = new_coord;
-                    occupied_coords.insert(new_coord, entity);
+                    self.occupied_coords.insert(new_coord, entity);
                 }
             }
         }
@@ -220,7 +222,7 @@ fn main() {
 
     let mut dispatcher = specs::DispatcherBuilder::new()
         .with_thread_local(tcod)
-        .with(MovementSystem {}, "movement_system", &[])
+        .with(MovementSystem::default(), "movement_system", &[])
         .with(EventDrain {}, "event_drain", &[])
         .build();
 
