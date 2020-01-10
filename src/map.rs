@@ -7,22 +7,36 @@ use tcod::colors::Color;
 pub struct Tile {
     pub blocked: bool,
     pub block_sight: bool,
-    pub bg: Color,
+    pub explored: bool,
+    pub bg_dark: Color,
+    pub bg_lit: Color,
 }
 
 impl Tile {
     const COLOR_DARK_WALL: Color = Color { r: 0, g: 0, b: 100 };
+    const COLOR_LIGHT_WALL: Color = Color {
+        r: 130,
+        g: 110,
+        b: 50,
+    };
     const COLOR_DARK_GROUND: Color = Color {
         r: 50,
         g: 50,
         b: 150,
+    };
+    const COLOR_LIGHT_GROUND: Color = Color {
+        r: 200,
+        g: 180,
+        b: 50,
     };
 
     pub fn empty() -> Self {
         Tile {
             blocked: false,
             block_sight: false,
-            bg: Tile::COLOR_DARK_GROUND,
+            explored: false,
+            bg_dark: Tile::COLOR_DARK_GROUND,
+            bg_lit: Tile::COLOR_LIGHT_GROUND,
         }
     }
 
@@ -30,7 +44,9 @@ impl Tile {
         Tile {
             blocked: true,
             block_sight: true,
-            bg: Tile::COLOR_DARK_WALL,
+            explored: false,
+            bg_dark: Tile::COLOR_DARK_WALL,
+            bg_lit: Tile::COLOR_LIGHT_WALL,
         }
     }
 }
@@ -141,6 +157,21 @@ impl Map {
         }
     }
 
+    pub fn can_move(&self, coord: &Coord) -> bool {
+        self.in_bounds(coord) && !self.get(coord).blocked
+    }
+
+    pub fn get(&self, coord: &Coord) -> Tile {
+        self.tiles[self.index(coord)]
+    }
+
+    pub fn explore(&mut self, coord: &Coord) {
+        let index = self.index(coord);
+        if let Some(tile) = self.tiles.get_mut(index) {
+            tile.explored = true;
+        }
+    }
+
     fn add_horizontal_tunnel(&mut self, x1: i32, x2: i32, y: i32) {
         for x in cmp::min(x1, x2)..(cmp::max(x1, x2) + 1) {
             self.set(Tile::empty(), &Coord::new(x, y));
@@ -151,14 +182,6 @@ impl Map {
         for y in cmp::min(y1, y2)..(cmp::max(y1, y2) + 1) {
             self.set(Tile::empty(), &Coord::new(x, y));
         }
-    }
-
-    pub fn can_move(&self, coord: &Coord) -> bool {
-        self.in_bounds(coord) && !self.get(coord).blocked
-    }
-
-    pub fn get(&self, coord: &Coord) -> Tile {
-        self.tiles[self.index(coord)]
     }
 
     fn in_bounds(&self, coord: &Coord) -> bool {

@@ -5,6 +5,7 @@ use tcod::colors;
 use tcod::console::*;
 use tcod::input::Key;
 use tcod::input::KeyCode;
+use tcod::map::{FovAlgorithm, Map as FovMap};
 
 use specs::{Builder, Entities, Entity, ReadStorage, System, World, WorldExt, WriteStorage};
 
@@ -23,11 +24,6 @@ const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 80;
 const LIMIT_FPS: i32 = 60;
 
-struct TcodSystem {
-    root: Root,
-    console: Offscreen,
-}
-
 struct GameState {
     running: bool,
     maps: Vec<Map>,
@@ -37,6 +33,12 @@ struct GameState {
 impl GameState {
     fn get_map(&self) -> &Map {
         self.maps.get(self.map).expect("Could not get current map")
+    }
+
+    fn get_map_mut(&mut self) -> &mut Map {
+        self.maps
+            .get_mut(self.map)
+            .expect("Could not get current map")
     }
 }
 
@@ -116,6 +118,11 @@ impl<'a> System<'a> for EventDrain {
     }
 }
 
+struct TcodSystem {
+    root: Root,
+    console: Offscreen,
+    fov_maps: Vec<FovMap>,
+}
 impl<'a> System<'a> for TcodSystem {
     type SystemData = (
         ReadStorage<'a, RenderComponent>,
@@ -131,14 +138,57 @@ impl<'a> System<'a> for TcodSystem {
         let root = &mut self.root;
         let console = &mut self.console;
         let (sprites, positions, players, mut movements, mut game_state) = data;
-        let map = game_state.get_map();
+        let current_map = game_state.map;
+        let map = game_state.get_map_mut();
+
+        match self.fov_maps.get(current_map) {
+            None => {
+                let mut new_fov_map = FovMap::new(map.width, map.height);
+                for y in 0..map.height {
+                    for x in 0..map.width {
+                        let tile = map.get(&Coord::new(x, y));
+                        new_fov_map.set(x, y, !tile.block_sight, !tile.blocked);
+                    }
+                }
+                self.fov_maps.insert(current_map, new_fov_map);
+            }
+            _ => {}
+        }
+        let fov_map = self
+            .fov_maps
+            .get_mut(current_map)
+            .expect("Could not get fov map");
+
+        let fov_algo = FovAlgorithm::Basic;
+        let fov_light_walls = true;
+        let torch_raidus = 10;
+
+        for (_, pos) in (&players, &positions).join() {
+            fov_map.compute_fov(
+                pos.coord.x,
+                pos.coord.y,
+                torch_raidus,
+                fov_light_walls,
+                fov_algo,
+            );
+        }
 
         root.clear();
         console.clear();
         for y in 0..map.height {
             for x in 0..map.width {
-                let tile = map.get(&Coord::new(x, y));
-                console.set_char_background(x, y, tile.bg, BackgroundFlag::Set);
+                let coord = Coord::new(x, y);
+                let tile = map.get(&coord);
+                let visible = fov_map.is_in_fov(x, y);
+                let bg_color = if visible { tile.bg_lit } else { tile.bg_dark };
+
+                if visible {
+                    map.explore(&coord);
+                }
+
+                if visible || tile.explored {
+                    console.set_char_background(x, y, bg_color, BackgroundFlag::Set);
+                }
             }
         }
         for (sprite, pos) in (&sprites, &positions).join() {
@@ -170,8 +220,8 @@ impl<'a> System<'a> for TcodSystem {
             Key { printable: 'l', .. } => Some((1, 0)),
             Key { printable: 'y', .. } => Some((-1, -1)),
             Key { printable: 'u', .. } => Some((1, -1)),
-            Key { printable: 'b', .. } => Some((-1, 1)),
-            Key { printable: 'n', .. } => Some((1, 1)),
+            Key { printable: 'n', .. } => Some((-1, 1)),
+            Key { printable: 'm', .. } => Some((1, 1)),
             _ => None,
         };
 
@@ -215,7 +265,11 @@ fn main() {
     };
 
     tcod::system::set_fps(LIMIT_FPS);
-    let tcod = TcodSystem { root, console };
+    let tcod = TcodSystem {
+        root,
+        console,
+        fov_maps: vec![],
+    };
 
     let mut world = World::new();
     world.register::<PositionComponent>();
