@@ -190,7 +190,6 @@ impl Map {
 
     fn set(&mut self, tile: Tile, coord: &Coord) {
         let index = self.index(coord);
-        dbg!(index);
         if index <= self.vec_size() {
             self.tiles[index] = tile;
         }
