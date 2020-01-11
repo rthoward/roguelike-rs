@@ -150,8 +150,8 @@ impl Map {
     }
 
     pub fn add_room(&mut self, room: &Rect) {
-        for x in (room.x1 + 1)..room.x2 {
-            for y in (room.y1 + 1)..room.y2 {
+        for x in (room.x1 + 1)..(room.x2 - 1) {
+            for y in (room.y1 + 1)..(room.y2 - 1) {
                 self.set(Tile::empty(), &Coord::new(x, y));
             }
         }
@@ -264,11 +264,12 @@ mod tests {
     #[test]
     fn test_add_room() -> Result<(), String> {
         /*
-            Create a 3x3 room on a 5x5 map, starting in the top-left corner.
+            Create a 3x3 room (including walls)on a 5x5 map,
+            starting in the top-left corner.
 
             #####
-            #..##
-            #..##
+            #.###
+            #####
             #####
             #####
         */
@@ -284,13 +285,13 @@ mod tests {
 
         assert_eq!(false, map.can_move(&Coord::new(1, 0)));
         assert_eq!(true, map.can_move(&Coord::new(1, 1)));
-        assert_eq!(true, map.can_move(&Coord::new(1, 2)));
+        assert_eq!(false, map.can_move(&Coord::new(1, 2)));
         assert_eq!(false, map.can_move(&Coord::new(1, 3)));
         assert_eq!(false, map.can_move(&Coord::new(1, 4)));
 
         assert_eq!(false, map.can_move(&Coord::new(2, 0)));
-        assert_eq!(true, map.can_move(&Coord::new(2, 1)));
-        assert_eq!(true, map.can_move(&Coord::new(2, 2)));
+        assert_eq!(false, map.can_move(&Coord::new(2, 1)));
+        assert_eq!(false, map.can_move(&Coord::new(2, 2)));
         assert_eq!(false, map.can_move(&Coord::new(2, 3)));
         assert_eq!(false, map.can_move(&Coord::new(2, 4)));
 
