@@ -294,8 +294,8 @@ fn main() {
             fg: colors::WHITE,
             bg: None,
         })
-        .with(MovementComponent { events: vec![] })
-        .with(CollisionComponent { events: vec![] })
+        .with(MovementComponent::default())
+        .with(CollisionComponent::default())
         .with(PlayerComponent)
         .build();
 

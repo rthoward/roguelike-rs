@@ -28,13 +28,13 @@ pub struct CollisionEvent {
     pub collidee: Entity,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Default)]
 #[storage(VecStorage)]
 pub struct MovementComponent {
     pub events: Vec<MoveEvent>,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Default)]
 #[storage(VecStorage)]
 pub struct CollisionComponent {
     pub events: Vec<CollisionEvent>,
