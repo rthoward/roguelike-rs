@@ -1,5 +1,5 @@
 use crate::coord::Coord;
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
 use std::cmp;
 use tcod::colors::Color;
 
@@ -89,6 +89,7 @@ pub struct Map {
     pub height: i32,
     pub width: i32,
     pub start: Coord,
+    rooms: Vec<Rect>,
 }
 
 impl Map {
@@ -100,6 +101,7 @@ impl Map {
             width,
             tiles,
             start: Coord::new(0, 0),
+            rooms: vec![],
         }
     }
 
@@ -113,15 +115,16 @@ impl Map {
         let max_rooms = 10;
         let room_min_size = 6;
         let room_max_size = 10;
+        let mut rng = rand::thread_rng();
 
         let mut map = Self::make_empty_map(height, width);
         let mut rooms: Vec<Rect> = vec![];
 
         for _ in 0..max_rooms {
-            let w = rand::thread_rng().gen_range(room_min_size, room_max_size + 1);
-            let h = rand::thread_rng().gen_range(room_min_size, room_max_size + 1);
-            let x = rand::thread_rng().gen_range(0, width - w);
-            let y = rand::thread_rng().gen_range(0, height - h);
+            let w = rng.gen_range(room_min_size, room_max_size + 1);
+            let h = rng.gen_range(room_min_size, room_max_size + 1);
+            let x = rng.gen_range(0, width - w);
+            let y = rng.gen_range(0, height - h);
             let room = Rect::new(x, y, w, h);
 
             let failed = rooms
@@ -146,7 +149,11 @@ impl Map {
             }
         }
 
-        map
+        Map {
+            rooms,
+            start: map.random_room_coord(),
+            ..map
+        }
     }
 
     pub fn add_room(&mut self, room: &Rect) {
@@ -170,6 +177,17 @@ impl Map {
         if let Some(tile) = self.tiles.get_mut(index) {
             tile.explored = true;
         }
+    }
+
+    pub fn random_room_coord(&self) -> Coord {
+        let mut rng = rand::thread_rng();
+
+        self.rooms
+            .choose(&mut rng)
+            .map_or(self.start, |room: &Rect| Coord {
+                x: rng.gen_range(room.x1, room.x2),
+                y: rng.gen_range(room.y1, room.y2),
+            })
     }
 
     fn add_horizontal_tunnel(&mut self, x1: i32, x2: i32, y: i32) {
