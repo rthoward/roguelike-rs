@@ -231,22 +231,10 @@ impl Map {
     fn index(&self, coord: &Coord) -> usize {
         (self.height * coord.y + coord.x) as usize
     }
-
-    fn to_s(&self) -> String {
-        let mut s = String::new();
-        for x in 0..self.width {
-            for y in 0..self.height {
-                let tile = self.get(&Coord::new(x, y));
-                let c = if tile.blocked { '#' } else { '.' };
-                s.push(c);
-            }
-            s.push('\n')
-        }
-        s
-    }
 }
 
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
