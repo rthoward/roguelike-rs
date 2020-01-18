@@ -7,10 +7,11 @@ use tcod::input::Key;
 use tcod::input::KeyCode;
 use tcod::map::{FovAlgorithm, Map as FovMap};
 
-use specs::{Builder, Entities, Entity, ReadStorage, System, World, WorldExt, WriteStorage};
+use specs::{Entities, Entity, ReadStorage, System, World, WorldExt, WriteStorage};
 
 mod components;
 mod coord;
+mod factories;
 mod map;
 
 use components::{
@@ -258,12 +259,6 @@ fn main() {
         .size(SCREEN_WIDTH, SCREEN_HEIGHT)
         .title("roguelike")
         .init();
-    let game_state = GameState {
-        maps: vec![Map::make_dungeon_map(SCREEN_WIDTH, SCREEN_WIDTH)],
-        running: true,
-        map: 0,
-    };
-
     tcod::system::set_fps(LIMIT_FPS);
     let tcod = TcodSystem {
         root,
@@ -274,7 +269,6 @@ fn main() {
     let mut world = World::new();
     world.register::<PositionComponent>();
     world.register::<RenderComponent>();
-
     let mut dispatcher = specs::DispatcherBuilder::new()
         .with_thread_local(tcod)
         .with(MovementSystem::default(), "movement_system", &[])
@@ -283,35 +277,17 @@ fn main() {
 
     dispatcher.setup(&mut world);
 
-    world
-        .create_entity()
-        .with(PositionComponent {
-            coord: game_state.get_map().start,
-            map: 0,
-        })
-        .with(RenderComponent {
-            glyph: '@',
-            fg: colors::WHITE,
-            bg: None,
-        })
-        .with(MovementComponent::default())
-        .with(CollisionComponent::default())
-        .with(PlayerComponent)
-        .build();
+    let game_state = GameState {
+        maps: vec![Map::make_dungeon_map(
+            SCREEN_WIDTH,
+            SCREEN_WIDTH,
+            &mut world,
+        )],
+        running: true,
+        map: 0,
+    };
 
-    world
-        .create_entity()
-        .with(PositionComponent {
-            coord: Coord::new(3, 3),
-            map: 0,
-        })
-        .with(RenderComponent {
-            glyph: 'o',
-            fg: colors::GREEN,
-            bg: None,
-        })
-        .with(CollisionComponent { events: vec![] })
-        .build();
+    factories::player(&mut world, game_state.get_map().start);
 
     world.insert(game_state);
 

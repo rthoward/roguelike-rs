@@ -1,7 +1,10 @@
-use crate::coord::Coord;
 use rand::{seq::SliceRandom, Rng};
+use specs::world::World;
 use std::cmp;
 use tcod::colors::Color;
+
+use crate::coord::Coord;
+use crate::factories;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tile {
@@ -105,7 +108,7 @@ impl Map {
         }
     }
 
-    pub fn make_dungeon_map(height: i32, width: i32) -> Self {
+    pub fn make_dungeon_map(height: i32, width: i32, world: &mut World) -> Self {
         /*
         Generate a dungeon style map by generating up to MAX_ROOMS non-overlapping rooms
         and connecting each one to its previous using either an vertical or horizontal
@@ -115,6 +118,7 @@ impl Map {
         let max_rooms = 10;
         let room_min_size = 6;
         let room_max_size = 10;
+        let num_orcs = 7;
         let mut rng = rand::thread_rng();
 
         let mut map = Self::make_empty_map(height, width);
@@ -149,8 +153,15 @@ impl Map {
             }
         }
 
+        map.rooms = rooms;
+
+        for _ in 0..num_orcs {
+            let coord = map.random_room_coord();
+            dbg!(coord);
+            factories::orc(world, coord);
+        }
+
         Map {
-            rooms,
             start: map.random_room_coord(),
             ..map
         }
@@ -185,8 +196,8 @@ impl Map {
         self.rooms
             .choose(&mut rng)
             .map_or(self.start, |room: &Rect| Coord {
-                x: rng.gen_range(room.x1, room.x2),
-                y: rng.gen_range(room.y1, room.y2),
+                x: rng.gen_range(room.x1 + 1, room.x2 - 1),
+                y: rng.gen_range(room.y1 + 1, room.y2 - 1),
             })
     }
 
