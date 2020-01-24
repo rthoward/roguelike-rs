@@ -1,6 +1,27 @@
 use crate::coord::Coord;
 use specs::{prelude::*, Component};
+use std::fmt;
 use tcod::colors;
+
+#[derive(Component, Debug)]
+#[storage(VecStorage)]
+pub struct LabelComponent {
+    pub label: String,
+}
+
+impl LabelComponent {
+    pub fn new(label: &str) -> Self {
+        LabelComponent {
+            label: label.to_owned(),
+        }
+    }
+}
+
+impl fmt::Display for LabelComponent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.label)
+    }
+}
 
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
@@ -44,6 +65,12 @@ pub struct CollisionComponent {
 #[storage(NullStorage)]
 pub struct PlayerComponent;
 
+#[derive(Debug)]
+pub struct CombatEvent {
+    pub attacker: Entity,
+    pub attackee: Entity,
+}
+
 #[derive(Component, Debug, Default)]
 #[storage(VecStorage)]
 pub struct FighterComponent {
@@ -51,6 +78,7 @@ pub struct FighterComponent {
     pub hp: i32,
     pub defense: i32,
     pub power: i32,
+    pub events: Vec<CombatEvent>,
 }
 
 #[derive(Component, Debug, Default)]

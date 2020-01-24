@@ -15,8 +15,9 @@ mod factories;
 mod map;
 
 use components::{
-    BasicAiComponent, CollisionComponent, CollisionEvent, FighterComponent, MoveEvent,
-    MovementComponent, PlayerComponent, PositionComponent, RenderComponent,
+    BasicAiComponent, CollisionComponent, CollisionEvent, CombatEvent, FighterComponent,
+    LabelComponent, MoveEvent, MovementComponent, PlayerComponent, PositionComponent,
+    RenderComponent,
 };
 use coord::Coord;
 use map::Map;
@@ -98,20 +99,29 @@ impl<'a> System<'a> for EventDrain {
     type SystemData = (
         WriteStorage<'a, MovementComponent>,
         WriteStorage<'a, CollisionComponent>,
+        WriteStorage<'a, FighterComponent>,
+        ReadStorage<'a, LabelComponent>,
+        Entities<'a>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut movement, mut collision) = data;
+        let (mut movement, mut collision, mut fighter, labels, entities) = data;
 
         for movement in (&mut movement).join() {
-            for _ in movement.events.drain(..) {
-            }
+            for _ in movement.events.drain(..) {}
         }
 
         for collision in (&mut collision).join() {
-            for _ in collision.events.drain(..) {
+            for _ in collision.events.drain(..) {}
+        }
+
+        for fighter in (&mut fighter).join() {
+            for f in fighter.events.drain(..) {
+                let attacker_label = labels.get(f.attacker).expect("no attacker label");
+                let attackee_label = labels.get(f.attackee).expect("no attackee label");
+                println!("{} attacks {}", attacker_label, attackee_label);
             }
         }
     }
@@ -121,22 +131,35 @@ struct BasicAiSystem;
 impl<'a> System<'a> for BasicAiSystem {
     type SystemData = (
         WriteStorage<'a, MovementComponent>,
+        WriteStorage<'a, FighterComponent>,
         ReadStorage<'a, PositionComponent>,
         ReadStorage<'a, BasicAiComponent>,
+        Entities<'a>,
         specs::ReadExpect<'a, Entity>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut movements, positions, basic_ai, player) = data;
+        let (mut movements, mut fighters, positions, basic_ai, entities, player) = data;
         let player_pos: Option<&PositionComponent> = positions.get(*player);
 
-        for (movement, position, _) in (&mut movements, &positions, &basic_ai).join() {
-            let toward_player = player_pos
-                .map(|pos: &PositionComponent| pos.coord.subtract(&position.coord).normalize());
-            if let Some(coord) = toward_player {
-                movement.events.push(MoveEvent { coord })
+        for (movement, position, _, entity) in
+            (&mut movements, &positions, &basic_ai, &entities).join()
+        {
+            if let Some(player_pos) = player_pos {
+                if position.coord.distance(&player_pos.coord) <= 1 {
+                    if let Some(fighter) = fighters.get_mut(entity) {
+                        fighter.events.push(CombatEvent {
+                            attacker: entity,
+                            attackee: *player,
+                        });
+                    }
+                } else {
+                    movement.events.push(MoveEvent {
+                        coord: position.coord.subtract(&player_pos.coord).normalize(),
+                    })
+                }
             }
         }
     }
@@ -304,6 +327,7 @@ fn main() {
     world.register::<PlayerComponent>();
     world.register::<FighterComponent>();
     world.register::<BasicAiComponent>();
+    world.register::<LabelComponent>();
 
     let game_state = GameState {
         maps: vec![Map::make_dungeon_map(

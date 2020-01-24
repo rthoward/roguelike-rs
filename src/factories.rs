@@ -10,6 +10,7 @@ use crate::coord::Coord;
 pub fn player(world: &mut World, coord: Coord) -> Entity {
     world
         .create_entity()
+        .with(LabelComponent::new("player"))
         .with(PositionComponent { coord, map: 0 })
         .with(RenderComponent {
             glyph: '@',
@@ -24,6 +25,7 @@ pub fn player(world: &mut World, coord: Coord) -> Entity {
             hp: 20,
             defense: 5,
             power: 5,
+            events: vec![],
         })
         .build()
 }
@@ -31,6 +33,7 @@ pub fn player(world: &mut World, coord: Coord) -> Entity {
 pub fn orc(world: &mut World, coord: Coord) -> Entity {
     world
         .create_entity()
+        .with(LabelComponent::new("orc"))
         .with(PositionComponent { coord, map: 0 })
         .with(RenderComponent {
             glyph: 'o',
@@ -44,6 +47,7 @@ pub fn orc(world: &mut World, coord: Coord) -> Entity {
             hp: 10,
             defense: 3,
             power: 3,
+            events: vec![],
         })
         .with(BasicAiComponent)
         .build()
