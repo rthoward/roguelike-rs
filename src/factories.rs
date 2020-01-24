@@ -1,13 +1,13 @@
 use specs::{
     world::{World, WorldExt},
-    Builder,
+    Builder, Entity,
 };
 use tcod::colors;
 
 use crate::components::*;
 use crate::coord::Coord;
 
-pub fn player(world: &mut World, coord: Coord) {
+pub fn player(world: &mut World, coord: Coord) -> Entity {
     world
         .create_entity()
         .with(PositionComponent { coord, map: 0 })
@@ -16,13 +16,19 @@ pub fn player(world: &mut World, coord: Coord) {
             fg: colors::WHITE,
             bg: None,
         })
-        .with(MovementComponent { events: vec![] })
-        .with(CollisionComponent { events: vec![] })
+        .with(MovementComponent::default())
+        .with(CollisionComponent::default())
         .with(PlayerComponent)
-        .build();
+        .with(FighterComponent {
+            max_hp: 20,
+            hp: 20,
+            defense: 5,
+            power: 5,
+        })
+        .build()
 }
 
-pub fn orc(world: &mut World, coord: Coord) {
+pub fn orc(world: &mut World, coord: Coord) -> Entity {
     world
         .create_entity()
         .with(PositionComponent { coord, map: 0 })
@@ -31,6 +37,14 @@ pub fn orc(world: &mut World, coord: Coord) {
             fg: colors::GREEN,
             bg: None,
         })
+        .with(MovementComponent::default())
         .with(CollisionComponent::default())
-        .build();
+        .with(FighterComponent {
+            max_hp: 10,
+            hp: 10,
+            defense: 3,
+            power: 3,
+        })
+        .with(BasicAiComponent)
+        .build()
 }

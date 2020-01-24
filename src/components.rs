@@ -43,3 +43,16 @@ pub struct CollisionComponent {
 #[derive(Component, Debug, Default)]
 #[storage(NullStorage)]
 pub struct PlayerComponent;
+
+#[derive(Component, Debug, Default)]
+#[storage(VecStorage)]
+pub struct FighterComponent {
+    pub max_hp: i32,
+    pub hp: i32,
+    pub defense: i32,
+    pub power: i32,
+}
+
+#[derive(Component, Debug, Default)]
+#[storage(VecStorage)]
+pub struct BasicAiComponent;

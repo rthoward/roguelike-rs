@@ -391,6 +391,7 @@ name = "roguelike"
 version = "0.1.0"
 dependencies = [
  "rand",
+ "shred",
  "specs",
  "tcod",
 ]
@@ -435,7 +436,19 @@ dependencies = [
  "hashbrown",
  "mopa",
  "rayon",
+ "shred-derive",
  "smallvec",
+]
+
+[[package]]
+name = "shred-derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c245c03fd923292ae18e01eadf65606fdc995c175433104ef3eee956db7c2d7"
+dependencies = [
+ "proc-macro2 0.4.30",
+ "quote 0.6.13",
+ "syn 0.15.44",
 ]
 
 [[package]]

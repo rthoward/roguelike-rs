@@ -15,4 +15,51 @@ impl Coord {
             y: self.y + other.y,
         }
     }
+
+    pub fn subtract(&self, other: &Coord) -> Self {
+        Coord {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+
+    pub fn normalize(&self) -> Self {
+        Coord {
+            x: if self.x != 0 { self.x / self.x.abs() } else { 0 },
+            y: if self.y != 0 { self.y / self.y.abs() } else { 0 },
+        }
+    }
+}
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() -> Result<(), String> {
+        assert_eq!(Coord { x: 1, y: 2}, Coord::new(1, 2));
+        Ok(())
+    }
+
+    #[test]
+    fn test_add() -> Result<(), String> {
+        let coord = Coord::new(1, 2);
+        assert_eq!(Coord { x: 3, y: 5}, coord.add(&Coord::new(2, 3)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_subtract() -> Result<(), String> {
+        let coord = Coord::new(8, 10);
+        assert_eq!(Coord { x: 6, y: 7}, coord.subtract(&Coord::new(2, 3)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_normalize() -> Result<(), String> {
+        assert_eq!(Coord { x: 0, y: 0}, Coord::new(0, 0).normalize());
+        assert_eq!(Coord { x: 1, y: 0}, Coord::new(100, 0).normalize());
+        assert_eq!(Coord { x: 1, y: 1}, Coord::new(2, 3).normalize());
+        assert_eq!(Coord { x: -1, y: 1}, Coord::new(-2, 3).normalize());
+        Ok(())
+    }
 }

@@ -10,3 +10,7 @@ edition = "2018"
 tcod = "0.15"
 specs = { version = "0.15.1", features = ["specs-derive"] }
 rand = "0.7.3"
+
+[dependencies.shred]
+version = "0.9.4"
+features = ["nightly"]

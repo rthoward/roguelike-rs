@@ -15,8 +15,8 @@ mod factories;
 mod map;
 
 use components::{
-    CollisionComponent, CollisionEvent, MoveEvent, MovementComponent, PlayerComponent,
-    PositionComponent, RenderComponent,
+    BasicAiComponent, CollisionComponent, CollisionEvent, FighterComponent, MoveEvent,
+    MovementComponent, PlayerComponent, PositionComponent, RenderComponent,
 };
 use coord::Coord;
 use map::Map;
@@ -106,17 +106,46 @@ impl<'a> System<'a> for EventDrain {
         let (mut movement, mut collision) = data;
 
         for movement in (&mut movement).join() {
-            for event in movement.events.drain(..) {
-                dbg!(event);
+            for _ in movement.events.drain(..) {
             }
         }
 
         for collision in (&mut collision).join() {
-            for event in collision.events.drain(..) {
-                dbg!(event);
+            for _ in collision.events.drain(..) {
             }
         }
     }
+}
+
+struct BasicAiSystem;
+impl<'a> System<'a> for BasicAiSystem {
+    type SystemData = (
+        WriteStorage<'a, MovementComponent>,
+        ReadStorage<'a, PositionComponent>,
+        ReadStorage<'a, BasicAiComponent>,
+        specs::ReadExpect<'a, Entity>,
+    );
+
+    fn run(&mut self, data: Self::SystemData) {
+        use specs::Join;
+
+        let (mut movements, positions, basic_ai, player) = data;
+        let player_pos: Option<&PositionComponent> = positions.get(*player);
+
+        for (movement, position, _) in (&mut movements, &positions, &basic_ai).join() {
+            let toward_player = player_pos
+                .map(|pos: &PositionComponent| pos.coord.subtract(&position.coord).normalize());
+            if let Some(coord) = toward_player {
+                movement.events.push(MoveEvent { coord })
+            }
+        }
+    }
+}
+
+enum InputAction {
+    Move(i32, i32),
+    Wait,
+    Nothing,
 }
 
 struct TcodSystem {
@@ -214,19 +243,20 @@ impl<'a> System<'a> for TcodSystem {
 
         let key = root.wait_for_keypress(true);
 
-        let movement: Option<(i32, i32)> = match key {
-            Key { printable: 'k', .. } => Some((0, -1)),
-            Key { printable: 'j', .. } => Some((0, 1)),
-            Key { printable: 'h', .. } => Some((-1, 0)),
-            Key { printable: 'l', .. } => Some((1, 0)),
-            Key { printable: 'y', .. } => Some((-1, -1)),
-            Key { printable: 'u', .. } => Some((1, -1)),
-            Key { printable: 'n', .. } => Some((-1, 1)),
-            Key { printable: 'm', .. } => Some((1, 1)),
-            _ => None,
+        let input_action: InputAction = match key {
+            Key { printable: 'k', .. } => InputAction::Move(0, -1),
+            Key { printable: 'j', .. } => InputAction::Move(0, 1),
+            Key { printable: 'h', .. } => InputAction::Move(-1, 0),
+            Key { printable: 'l', .. } => InputAction::Move(1, 0),
+            Key { printable: 'y', .. } => InputAction::Move(-1, -1),
+            Key { printable: 'u', .. } => InputAction::Move(1, -1),
+            Key { printable: 'n', .. } => InputAction::Move(-1, 1),
+            Key { printable: 'm', .. } => InputAction::Move(1, 1),
+            Key { printable: '.', .. } => InputAction::Wait,
+            _ => InputAction::Nothing,
         };
 
-        if let Some((x, y)) = movement {
+        if let InputAction::Move(x, y) = input_action {
             for (_player, movements) in (&players, &mut movements).join() {
                 movements.events.push(MoveEvent {
                     coord: Coord::new(x, y),
@@ -269,13 +299,11 @@ fn main() {
     let mut world = World::new();
     world.register::<PositionComponent>();
     world.register::<RenderComponent>();
-    let mut dispatcher = specs::DispatcherBuilder::new()
-        .with_thread_local(tcod)
-        .with(MovementSystem::default(), "movement_system", &[])
-        .with(EventDrain {}, "event_drain", &[])
-        .build();
-
-    dispatcher.setup(&mut world);
+    world.register::<MovementComponent>();
+    world.register::<CollisionComponent>();
+    world.register::<PlayerComponent>();
+    world.register::<FighterComponent>();
+    world.register::<BasicAiComponent>();
 
     let game_state = GameState {
         maps: vec![Map::make_dungeon_map(
@@ -287,9 +315,19 @@ fn main() {
         map: 0,
     };
 
-    factories::player(&mut world, game_state.get_map().start);
+    let player = factories::player(&mut world, game_state.get_map().start);
 
     world.insert(game_state);
+    world.insert(player);
+
+    let mut dispatcher = specs::DispatcherBuilder::new()
+        .with_thread_local(tcod)
+        .with(BasicAiSystem {}, "basic_ai", &[])
+        .with(MovementSystem::default(), "movement_system", &["basic_ai"])
+        .with(EventDrain {}, "event_drain", &["movement_system"])
+        .build();
+
+    dispatcher.setup(&mut world);
 
     loop {
         dispatcher.dispatch(&mut world);
