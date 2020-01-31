@@ -157,7 +157,7 @@ impl<'a> System<'a> for BasicAiSystem {
                     }
                 } else {
                     movement.events.push(MoveEvent {
-                        coord: position.coord.subtract(&player_pos.coord).normalize(),
+                        coord: position.coord.toward(&player_pos.coord).normalize(),
                     })
                 }
             }

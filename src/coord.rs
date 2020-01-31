@@ -16,6 +16,13 @@ impl Coord {
         }
     }
 
+    pub fn toward(&self, other: &Coord) -> Self {
+        Coord {
+            x: other.x - self.x,
+            y: other.y - self.y,
+        }
+    }
+
     pub fn subtract(&self, other: &Coord) -> Self {
         Coord {
             x: self.x - other.x,
