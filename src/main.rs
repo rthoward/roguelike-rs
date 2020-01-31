@@ -53,6 +53,7 @@ impl<'a> System<'a> for MovementSystem {
         WriteStorage<'a, PositionComponent>,
         WriteStorage<'a, MovementComponent>,
         WriteStorage<'a, CollisionComponent>,
+        WriteStorage<'a, FighterComponent>,
         specs::ReadExpect<'a, GameState>,
         Entities<'a>,
     );
@@ -60,7 +61,7 @@ impl<'a> System<'a> for MovementSystem {
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut positions, mut movements, mut collisions, game_state, entities) = data;
+        let (mut positions, mut movements, mut collisions, mut fighters, game_state, entities) = data;
         let map = game_state.get_map();
 
         for (position, entity) in (&positions, &*entities).join() {
@@ -72,11 +73,13 @@ impl<'a> System<'a> for MovementSystem {
                 let map_collision = !map.can_move(&new_coord);
                 let entity_collision = if let Some(collidee) = self.occupied_coords.get(&new_coord)
                 {
-                    if let Some(collidable_collidee) = collisions.get_mut(*collidee) {
-                        collidable_collidee.events.push(CollisionEvent {
-                            collider: entity,
-                            collidee: *collidee,
-                        });
+                    if let Some(_) = collisions.get_mut(*collidee) {
+                        if let Some(fighter) = fighters.get_mut(entity) {
+                            fighter.events.push(CombatEvent{
+                                attacker: entity,
+                                attackee: *collidee,
+                            })
+                        }
                         true
                     } else {
                         false
@@ -107,7 +110,7 @@ impl<'a> System<'a> for EventDrain {
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut movement, mut collision, mut fighter, labels, entities) = data;
+        let (mut movement, mut collision, mut fighter, labels, _) = data;
 
         for movement in (&mut movement).join() {
             for _ in movement.events.drain(..) {}
@@ -160,6 +163,26 @@ impl<'a> System<'a> for BasicAiSystem {
                         coord: position.coord.toward(&player_pos.coord).normalize(),
                     })
                 }
+            }
+        }
+    }
+}
+
+struct CombatSystem;
+impl<'a> System<'a> for CombatSystem {
+    type SystemData = (
+        WriteStorage<'a, FighterComponent>,
+        Entities<'a>,
+    );
+
+    fn run(&mut self, data: Self::SystemData) {
+        use specs::Join;
+
+        let (fighters, _) = data;
+
+        for fighter in (fighters).join() {
+            for event in fighter.events.iter() {
+                dbg!(event);
             }
         }
     }
@@ -349,6 +372,7 @@ fn main() {
         .with(BasicAiSystem {}, "basic_ai", &[])
         .with(MovementSystem::default(), "movement_system", &["basic_ai"])
         .with(EventDrain {}, "event_drain", &["movement_system"])
+        .with(CombatSystem {}, "combat_system", &["movement_system"])
         .build();
 
     dispatcher.setup(&mut world);
