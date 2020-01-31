@@ -17,7 +17,7 @@ mod map;
 use components::{
     BasicAiComponent, CollisionComponent, CollisionEvent, CombatEvent, FighterComponent,
     LabelComponent, MoveEvent, MovementComponent, PlayerComponent, PositionComponent,
-    RenderComponent,
+    RenderComponent
 };
 use coord::Coord;
 use map::Map;
@@ -287,43 +287,48 @@ impl<'a> System<'a> for TcodSystem {
         );
         root.flush();
 
-        let key = root.wait_for_keypress(true);
+        // Loop through keypresses until a player action is taken or we quit the game
+        loop {
+            let key = root.wait_for_keypress(true);
+            let input_action: InputAction = match key {
+                Key { printable: 'k', .. } => InputAction::Move(0, -1),
+                Key { printable: 'j', .. } => InputAction::Move(0, 1),
+                Key { printable: 'h', .. } => InputAction::Move(-1, 0),
+                Key { printable: 'l', .. } => InputAction::Move(1, 0),
+                Key { printable: 'y', .. } => InputAction::Move(-1, -1),
+                Key { printable: 'u', .. } => InputAction::Move(1, -1),
+                Key { printable: 'n', .. } => InputAction::Move(-1, 1),
+                Key { printable: 'm', .. } => InputAction::Move(1, 1),
+                Key { printable: '.', .. } => InputAction::Wait,
+                _ => InputAction::Nothing,
+            };
 
-        let input_action: InputAction = match key {
-            Key { printable: 'k', .. } => InputAction::Move(0, -1),
-            Key { printable: 'j', .. } => InputAction::Move(0, 1),
-            Key { printable: 'h', .. } => InputAction::Move(-1, 0),
-            Key { printable: 'l', .. } => InputAction::Move(1, 0),
-            Key { printable: 'y', .. } => InputAction::Move(-1, -1),
-            Key { printable: 'u', .. } => InputAction::Move(1, -1),
-            Key { printable: 'n', .. } => InputAction::Move(-1, 1),
-            Key { printable: 'm', .. } => InputAction::Move(1, 1),
-            Key { printable: '.', .. } => InputAction::Wait,
-            _ => InputAction::Nothing,
-        };
-
-        if let InputAction::Move(x, y) = input_action {
-            for (_player, movements) in (&players, &mut movements).join() {
-                movements.events.push(MoveEvent {
-                    coord: Coord::new(x, y),
-                });
-            }
-        }
-
-        match key {
-            Key {
-                code: KeyCode::Enter,
-                alt: true,
-                ..
-            } => {
-                root.set_fullscreen(!root.is_fullscreen());
+            if let InputAction::Move(x, y) = input_action {
+                for (_player, movements) in (&players, &mut movements).join() {
+                    movements.events.push(MoveEvent {
+                        coord: Coord::new(x, y),
+                    });
+                }
+                break;
             }
 
-            Key { printable: 'q', .. } => game_state.running = false,
+            match key {
+                Key {
+                    code: KeyCode::Enter,
+                    alt: true,
+                    ..
+                } => {
+                    root.set_fullscreen(!root.is_fullscreen());
+                }
 
-            _ => {}
+                Key { printable: 'q', .. } => game_state.running = false,
+
+                _ => {}
+            }
+
+            game_state.running = game_state.running && !root.window_closed();
+            if !game_state.running { break }
         }
-        game_state.running = game_state.running && !root.window_closed();
     }
 }
 
