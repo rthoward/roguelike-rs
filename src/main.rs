@@ -17,7 +17,7 @@ mod map;
 use components::{
     BasicAiComponent, CollisionComponent, CollisionEvent, CombatEvent, FighterComponent,
     LabelComponent, MoveEvent, MovementComponent, PlayerComponent, PositionComponent,
-    RenderComponent
+    RenderComponent,
 };
 use coord::Coord;
 use map::Map;
@@ -61,7 +61,8 @@ impl<'a> System<'a> for MovementSystem {
     fn run(&mut self, data: Self::SystemData) {
         use specs::Join;
 
-        let (mut positions, mut movements, mut collisions, mut fighters, game_state, entities) = data;
+        let (mut positions, mut movements, mut collisions, mut fighters, game_state, entities) =
+            data;
         let map = game_state.get_map();
 
         for (position, entity) in (&positions, &*entities).join() {
@@ -69,28 +70,25 @@ impl<'a> System<'a> for MovementSystem {
         }
         for (position, movements, entity) in (&mut positions, &mut movements, &*entities).join() {
             for MoveEvent { coord } in movements.events.iter() {
-                let new_coord = position.coord.add(coord);
-                let map_collision = !map.can_move(&new_coord);
-                let entity_collision = if let Some(collidee) = self.occupied_coords.get(&new_coord)
-                {
-                    if let Some(_) = collisions.get_mut(*collidee) {
-                        if let Some(fighter) = fighters.get_mut(entity) {
-                            fighter.events.push(CombatEvent{
-                                attacker: entity,
-                                attackee: *collidee,
-                            })
+                let target_coord = position.coord.add(coord);
+                if map.can_move(&target_coord) {
+                    if let Some(collidee) = self.occupied_coords.get(&target_coord) {
+                        // Collided with another entity. Attack them
+                        if collisions.get(*collidee).is_some() && fighters.get(*collidee).is_some()
+                        {
+                            if let Some(fighter) = fighters.get_mut(entity) {
+                                fighter.events.push(CombatEvent {
+                                    attacker: entity,
+                                    attackee: *collidee,
+                                })
+                            }
                         }
-                        true
                     } else {
-                        false
+                        // No collisions. Move to the target coord
+                        self.occupied_coords.remove(&position.coord);
+                        position.coord = target_coord;
+                        self.occupied_coords.insert(target_coord, entity);
                     }
-                } else {
-                    false
-                };
-                if !map_collision && !entity_collision {
-                    self.occupied_coords.remove(&position.coord);
-                    position.coord = new_coord;
-                    self.occupied_coords.insert(new_coord, entity);
                 }
             }
         }
